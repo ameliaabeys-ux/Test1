@@ -3,7 +3,8 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches:
+      - main
 
 jobs:
   build:
@@ -13,10 +14,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check project archive
+        run: |
+          ls -lh
+          python3 - <<'PY'
+          import zipfile
+
+          archive = "GenshinHubFrontend.zip"
+
+          print("Testing:", archive)
+
+          with zipfile.ZipFile(archive, "r") as z:
+              print("ZIP is valid")
+              print("Files:", len(z.namelist()))
+              for name in z.namelist()[:20]:
+                  print(name)
+          PY
+
       - name: Extract project
         run: |
-          unzip -q GenshinHubFrontend.zip -d .
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+
+          archive = Path("GenshinHubFrontend.zip")
+          destination = Path("GenshinHubFrontend")
+
+          destination.mkdir(exist_ok=True)
+
+          with zipfile.ZipFile(archive, "r") as z:
+              z.extractall(destination)
+
+          print("Project extracted successfully")
+          PY
+
+      - name: Verify Gradle project
+        run: |
+          test -f GenshinHubFrontend/settings.gradle.kts
           test -f GenshinHubFrontend/app/build.gradle.kts
+          echo "Gradle project detected successfully"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -31,10 +67,12 @@ jobs:
 
       - name: Build APK
         working-directory: GenshinHubFrontend
-        run: gradle assembleDebug --no-daemon
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GenshinHub-debug-apk
           path: GenshinHubFrontend/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
